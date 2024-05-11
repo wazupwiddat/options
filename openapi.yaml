@@ -1,0 +1,74 @@
+openapi: 3.0.0
+info:
+  title: Options Strategy API
+  description: This API allows clients to retrieve option strategies for given tickers and time frames.
+  version: 1.0.0
+servers:
+  - url: 'http://localhost:8080'
+    description: Development server
+paths:
+  /options:
+    get:
+      summary: Get options strategies
+      description: Retrieve options strategies for a specified ticker and number of weeks out.
+      parameters:
+        - in: query
+          name: ticker
+          schema:
+            type: string
+            default: 'AAPL'
+          description: Ticker symbol of the underlying security.
+        - in: query
+          name: weeksout
+          schema:
+            type: integer
+            default: 5
+          description: Number of weeks out to fetch options for.
+      responses:
+        '200':
+          description: Successfully retrieved the strategies
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OptionResponse'
+        '400':
+          description: Invalid request parameters
+        '500':
+          description: Internal server error
+components:
+  schemas:
+    OptionStrategy:
+      type: object
+      properties:
+        ticker:
+          type: string
+          example: 'AAPL'
+        date:
+          type: string
+          format: date
+          example: '2024-05-01'
+        strategyType:
+          type: string
+          example: 'Straddle'
+        details:
+          type: object
+          properties:
+            price:
+              type: number
+              format: float
+              example: 200.50
+            potentialReturn:
+              type: number
+              format: float
+              example: 10.5
+    OptionResponse:
+      type: object
+      properties:
+        Ideas:
+          type: array
+          items:
+            $ref: '#/components/schemas/OptionStrategy'
+        Bid:
+          type: number
+          format: float
+          example: 150.50
