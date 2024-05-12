@@ -1,11 +1,114 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: Deploy Go API on ECS
+Description: Deploy Options API on ECS with networking and security
 
 Resources:
+  VPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 10.0.0.0/16
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+
+  PublicSubnetOne:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: 10.0.1.0/24
+      AvailabilityZone: !Select [0, !GetAZs '']
+      MapPublicIpOnLaunch: true
+
+  PublicSubnetTwo:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: 10.0.2.0/24
+      AvailabilityZone: !Select [1, !GetAZs '']
+      MapPublicIpOnLaunch: true
+
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+
+  GatewayAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref VPC
+      InternetGatewayId: !Ref InternetGateway
+
+  RouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+
+  PublicRoute:
+    Type: AWS::EC2::Route
+    DependsOn: GatewayAttachment
+    Properties:
+      RouteTableId: !Ref RouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+
+  SubnetRouteTableAssociationOne:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnetOne
+      RouteTableId: !Ref RouteTable
+
+  SubnetRouteTableAssociationTwo:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnetTwo
+      RouteTableId: !Ref RouteTable
+
+  SecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Allow HTTP to container
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 8080
+          ToPort: 8080
+          CidrIp: 0.0.0.0/0
+
+  ALB:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Subnets:
+        - !Ref PublicSubnetOne
+        - !Ref PublicSubnetTwo
+      SecurityGroups:
+        - !Ref SecurityGroup
+      Scheme: internet-facing
+
+  Listener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref TargetGroup
+      LoadBalancerArn: !Ref ALB
+      Port: 8080
+      Protocol: HTTP
+
+  TargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      Port: 8080
+      Protocol: HTTP
+      VpcId: !Ref VPC
+      TargetType: ip
+      HealthCheckEnabled: true
+      HealthCheckIntervalSeconds: 30
+      HealthCheckPath: "/"
+      HealthCheckProtocol: HTTP
+      HealthCheckTimeoutSeconds: 5
+      HealthyThresholdCount: 2
+      UnhealthyThresholdCount: 2
+
   ECSCluster:
     Type: AWS::ECS::Cluster
     Properties:
-      ClusterName: GoAPICluster
+      ClusterName: OptionsAPICluster
 
   ECSTaskExecutionRole:
     Type: AWS::IAM::Role
@@ -17,80 +120,56 @@ Resources:
             Principal:
               Service: [ecs-tasks.amazonaws.com]
             Action: ['sts:AssumeRole']
-      Path: /
-      Policies:
-        - PolicyName: AmazonECSTaskExecutionRolePolicy
-          PolicyDocument:
-            Version: '2012-10-17'
-            Statement:
-              - Effect: Allow
-                Action:
-                  - 'ecr:GetAuthorizationToken'
-                  - 'ecr:BatchCheckLayerAvailability'
-                  - 'ecr:GetDownloadUrlForLayer'
-                  - 'ecr:GetRepositoryPolicy'
-                  - 'ecr:DescribeRepositories'
-                  - 'ecr:ListImages'
-                  - 'ecr:DescribeImages'
-                  - 'ecr:BatchGetImage'
-                  - 'logs:CreateLogStream'
-                  - 'logs:PutLogEvents'
-                Resource: '*'
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy
 
   ECSTaskDefinition:
     Type: AWS::ECS::TaskDefinition
     Properties:
-      Family: go-api-task
+      Family: options-api-task
+      Cpu: '256'            # Specify CPU units at the task level
+      Memory: '512'         # Specify memory in MiB at the task level
       ExecutionRoleArn: !GetAtt ECSTaskExecutionRole.Arn
       ContainerDefinitions:
-        - Name: go-api-container
+        - Name: options-api-container
           Image: !Ref ECRImageURI
           Essential: true
           Memory: 512
           Cpu: 256
           PortMappings:
             - ContainerPort: 8080
-              HostPort: 8080
-              Protocol: tcp
       NetworkMode: awsvpc
       RequiresCompatibilities:
         - FARGATE
 
   ECSService:
     Type: AWS::ECS::Service
-    DependsOn: ECSTaskDefinition
+    DependsOn: Listener  # Ensures that the Listener is created before the ECS Service
     Properties:
-      ServiceName: GoAPIService
+      ServiceName: OptionsAPIService
       Cluster: !Ref ECSCluster
       TaskDefinition: !Ref ECSTaskDefinition
       DesiredCount: 1
       LaunchType: FARGATE
+      LoadBalancers:
+        - ContainerName: options-api-container
+          ContainerPort: 8080
+          TargetGroupArn: !Ref TargetGroup      
       NetworkConfiguration:
         AwsvpcConfiguration:
           Subnets:
-            - !Ref SubnetId
+            - !Ref PublicSubnetOne
+            - !Ref PublicSubnetTwo
           SecurityGroups:
-            - !Ref SecurityGroupId
+            - !Ref SecurityGroup
           AssignPublicIp: ENABLED
 
 Parameters:
-  SubnetId:
-    Type: AWS::EC2::Subnet::Id
-    Description: Subnet ID for the ECS service
-  SecurityGroupId:
-    Type: AWS::EC2::SecurityGroup::Id
-    Description: Security Group ID for the ECS service
   ECRImageURI:
     Type: String
     Description: URI for the ECR Docker image
 
 Outputs:
-  ServiceArn:
-    Description: "The ARN of the ECS Service"
-    Value: !Ref ECSService
-  TaskDefinitionArn:
-    Description: "The ARN of the Task Definition"
-    Value: !Ref ECSTaskDefinition
-  ClusterArn:
-    Description: "The ARN of the ECS Cluster"
-    Value: !Ref ECSCluster
+  ALBDNSName:
+    Description: "The DNS Name of the ALB"
+    Value: !GetAtt ALB.DNSName

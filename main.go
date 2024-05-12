@@ -21,11 +21,16 @@ type OptionResponse struct {
 }
 
 func main() {
+	http.HandleFunc("/", healthCheck)                     // Health check endpoint
 	http.HandleFunc("/options", handleOptionsRequest)     // Handle API requests
 	http.Handle("/spec", http.FileServer(http.Dir("./"))) // Serve the OpenAPI spec file
 
 	log.Println("Server starting on port 8080...")
 	log.Fatal(http.ListenAndServe(":8080", nil))
+}
+
+func healthCheck(w http.ResponseWriter, r *http.Request) {
+	fmt.Fprint(w, "OK") // Simple response to indicate the service is running
 }
 
 func handleOptionsRequest(w http.ResponseWriter, r *http.Request) {

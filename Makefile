@@ -18,6 +18,7 @@ build-go:
 build: build-go
 	@echo "Building Docker image $(IMAGE_NAME)..."
 	docker build -t $(IMAGE_NAME) .
+	docker tag $(IMAGE_NAME) $(REPO):latest
 
 # Log in to AWS ECR
 .PHONY: login
@@ -28,8 +29,8 @@ login:
 # Push the Docker image to AWS ECR
 .PHONY: push
 push: build login
-	@echo "Pushing Docker image $(IMAGE_NAME)..."
-	docker push $(IMAGE_NAME)
+	@echo "Pushing Docker image $(REPO):latest..."
+	docker push $(REPO):latest
 
 # Clean up the binaries
 .PHONY: clean

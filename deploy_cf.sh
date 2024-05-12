@@ -2,10 +2,10 @@
 
 # Variables
 TEMPLATE_FILE="cloudformation.yaml"
-STACK_NAME="GoAPIStack"
-BUCKET_NAME="your-s3-bucket-name"
+STACK_NAME="OptionsAPIStack"
+BUCKET_NAME="jdub-option-images"  # Update this with your actual S3 bucket name
 REGION="us-east-1"
-PARAMETERS="ParameterKey=SubnetId,ParameterValue=subnet-abc123 ParameterKey=SecurityGroupId,ParameterValue=sg-abc123 ParameterKey=ECRImageURI,ParameterValue=026450499422.dkr.ecr.us-east-1.amazonaws.com/options:latest"
+ECR_IMAGE_URI="026450499422.dkr.ecr.us-east-1.amazonaws.com/options:latest"  # Update this if needed
 
 # Validate the CloudFormation template
 echo "Validating the CloudFormation template..."
@@ -33,7 +33,7 @@ aws cloudformation describe-stacks --stack-name $STACK_NAME > /dev/null 2>&1
 if [ $? -eq 0 ]; then
     # Update the stack
     echo "Updating CloudFormation stack..."
-    aws cloudformation update-stack --stack-name $STACK_NAME --template-url https://$BUCKET_NAME.s3.amazonaws.com/$TEMPLATE_FILE --parameters $PARAMETERS --capabilities "CAPABILITY_IAM" "CAPABILITY_NAMED_IAM" "CAPABILITY_AUTO_EXPAND"
+    aws cloudformation update-stack --stack-name $STACK_NAME --template-url https://$BUCKET_NAME.s3.$REGION.amazonaws.com/$TEMPLATE_FILE --capabilities CAPABILITY_IAM CAPABILITY_NAMED_IAM CAPABILITY_AUTO_EXPAND --parameters ParameterKey=ECRImageURI,ParameterValue=$ECR_IMAGE_URI
     if [ $? -ne 0 ]; then
         echo "Failed to update stack."
         exit 1
@@ -43,7 +43,7 @@ if [ $? -eq 0 ]; then
 else
     # Create the stack
     echo "Creating CloudFormation stack..."
-    aws cloudformation create-stack --stack-name $STACK_NAME --template-url https://$BUCKET_NAME.s3.amazonaws.com/$TEMPLATE_FILE --parameters $PARAMETERS --capabilities "CAPABILITY_IAM" "CAPABILITY_NAMED_IAM" "CAPABILITY_AUTO_EXPAND"
+    aws cloudformation create-stack --stack-name $STACK_NAME --template-url https://$BUCKET_NAME.s3.$REGION.amazonaws.com/$TEMPLATE_FILE --capabilities CAPABILITY_IAM CAPABILITY_NAMED_IAM CAPABILITY_AUTO_EXPAND --parameters ParameterKey=ECRImageURI,ParameterValue=$ECR_IMAGE_URI
     if [ $? -ne 0 ]; then
         echo "Failed to create stack."
         exit 1
