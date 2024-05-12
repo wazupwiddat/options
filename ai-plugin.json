@@ -1,0 +1,52 @@
+{
+    "name": "Options Strategy Plugin",
+    "version": "1.0.0",
+    "description": "This plugin provides option trading strategies for given tickers and specific future weeks based on user queries.",
+    "permissions_requested": ["network_access"],
+    "auth_required": false,
+    "oauth2": {
+      "authorization_url": "http://optionsa-alb-tleo4dsmn9rb-1722392397.us-east-1.elb.amazonaws.com:8080/auth",
+      "token_url": "http://optionsa-alb-tleo4dsmn9rb-1722392397.us-east-1.elb.amazonaws.com:8080/token",
+      "refresh_url": "http://optionsa-alb-tleo4dsmn9rb-1722392397.us-east-1.elb.amazonaws.com:8080/refresh",
+      "scopes": ["read:options"]
+    },
+    "endpoints": [
+        {
+            "name": "Get Options Strategies",
+            "url": "http://optionsa-alb-tleo4dsmn9rb-1722392397.us-east-1.elb.amazonaws.com:8080/options",
+            "http_method": "GET",
+            "headers": [  ],
+            "description": "Retrieve options trading strategies based on specified ticker and weeks out.",
+            "query_parameters": [
+                {
+                    "name": "ticker",
+                    "required": true,
+                    "description": "The ticker symbol of the underlying security."
+                },
+                {
+                    "name": "weeksout",
+                    "required": true,
+                    "description": "Number of weeks out to fetch options for."
+                }
+            ],
+            "response_mapping": {
+                "path": "$.ideas",
+                "type": "array",
+                "element": {
+                    "path": "$",
+                    "type": "object",
+                    "fields": {
+                        "strategyType": {
+                            "path": "$.strategyType",
+                            "type": "string"
+                        },
+                        "details": {
+                            "path": "$.details",
+                            "type": "string"
+                        }
+                    }
+                }
+            }
+        }
+    ]
+}

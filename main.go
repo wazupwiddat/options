@@ -21,16 +21,26 @@ type OptionResponse struct {
 }
 
 func main() {
-	http.HandleFunc("/", healthCheck)                     // Health check endpoint
-	http.HandleFunc("/options", handleOptionsRequest)     // Handle API requests
-	http.Handle("/spec", http.FileServer(http.Dir("./"))) // Serve the OpenAPI spec file
+	http.HandleFunc("/options", handleOptionsRequest)                                  // Handle API requests
+	http.Handle("/spec/", http.StripPrefix("/spec/", http.FileServer(http.Dir("./")))) // Correctly serve files under /spec
+
+	http.HandleFunc("/", rootHandler) // Root handler that checks the path
 
 	log.Println("Server starting on port 8080...")
 	log.Fatal(http.ListenAndServe(":8080", nil))
 }
 
-func healthCheck(w http.ResponseWriter, r *http.Request) {
-	fmt.Fprint(w, "OK") // Simple response to indicate the service is running
+func rootHandler(w http.ResponseWriter, r *http.Request) {
+	if r.URL.Path != "/" {
+		http.NotFound(w, r) // Respond with 404 for any requests not exactly matching the root
+		return
+	}
+	healthCheck(w) // Call healthCheck only if the path is exactly "/"
+}
+
+func healthCheck(w http.ResponseWriter) {
+	w.WriteHeader(http.StatusOK)
+	w.Write([]byte("OK"))
 }
 
 func handleOptionsRequest(w http.ResponseWriter, r *http.Request) {
