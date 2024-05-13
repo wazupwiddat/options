@@ -1,5 +1,5 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: Deploy Options API on ECS with networking and security
+Description: Deploy Options API on ECS with networking, security, and HTTPS support
 
 Resources:
   VPC:
@@ -62,12 +62,16 @@ Resources:
   SecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupDescription: Allow HTTP to container
+      GroupDescription: Allow HTTP and HTTPS to container
       VpcId: !Ref VPC
       SecurityGroupIngress:
         - IpProtocol: tcp
-          FromPort: 8080
-          ToPort: 8080
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
           CidrIp: 0.0.0.0/0
 
   ALB:
@@ -80,14 +84,26 @@ Resources:
         - !Ref SecurityGroup
       Scheme: internet-facing
 
-  Listener:
+  HTTPSListener:
     Type: AWS::ElasticLoadBalancingV2::Listener
     Properties:
       DefaultActions:
         - Type: forward
           TargetGroupArn: !Ref TargetGroup
       LoadBalancerArn: !Ref ALB
-      Port: 8080
+      Port: 443
+      Protocol: HTTPS
+      Certificates:
+        - CertificateArn: !Ref CertificateArn
+
+  HTTPListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref TargetGroup
+      LoadBalancerArn: !Ref ALB
+      Port: 80
       Protocol: HTTP
 
   TargetGroup:
@@ -98,17 +114,12 @@ Resources:
       VpcId: !Ref VPC
       TargetType: ip
       HealthCheckEnabled: true
-      HealthCheckIntervalSeconds: 30
       HealthCheckPath: "/"
       HealthCheckProtocol: HTTP
-      HealthCheckTimeoutSeconds: 5
-      HealthyThresholdCount: 2
-      UnhealthyThresholdCount: 2
+      HealthCheckPort: "8080"
 
   ECSCluster:
     Type: AWS::ECS::Cluster
-    Properties:
-      ClusterName: OptionsAPICluster
 
   ECSTaskExecutionRole:
     Type: AWS::IAM::Role
@@ -116,12 +127,13 @@ Resources:
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
-          - Effect: Allow
+          - Effect: "Allow"
             Principal:
-              Service: [ecs-tasks.amazonaws.com]
-            Action: ['sts:AssumeRole']
+              Service: "ecs-tasks.amazonaws.com"
+            Action:
+              - "sts:AssumeRole"
       ManagedPolicyArns:
-        - arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy
+        - "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
 
   ECSTaskDefinition:
     Type: AWS::ECS::TaskDefinition
@@ -144,7 +156,7 @@ Resources:
 
   ECSService:
     Type: AWS::ECS::Service
-    DependsOn: Listener  # Ensures that the Listener is created before the ECS Service
+    DependsOn: [HTTPSListener, HTTPListener]  # Ensuring that Listeners are created before the ECS Service
     Properties:
       ServiceName: OptionsAPIService
       Cluster: !Ref ECSCluster
@@ -168,6 +180,9 @@ Parameters:
   ECRImageURI:
     Type: String
     Description: URI for the ECR Docker image
+  CertificateArn:
+    Type: String
+    Description: The ARN of the SSL/TLS certificate from AWS Certificate Manager
 
 Outputs:
   ALBDNSName:

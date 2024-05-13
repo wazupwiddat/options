@@ -4,7 +4,7 @@ info:
   description: This API allows clients to retrieve option strategies for given tickers and time frames.
   version: 1.0.0
 servers:
-  - url: 'http://localhost:8080'
+  - url: 'https://api.jrdub.com'
     description: Development server
 paths:
   /options:

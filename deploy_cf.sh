@@ -6,6 +6,7 @@ STACK_NAME="OptionsAPIStack"
 BUCKET_NAME="jdub-option-images"  # Update this with your actual S3 bucket name
 REGION="us-east-1"
 ECR_IMAGE_URI="026450499422.dkr.ecr.us-east-1.amazonaws.com/options:latest"  # Update this if needed
+CERT_ARN="arn:aws:acm:us-east-1:026450499422:certificate/390e9185-4df5-4405-89d3-38ec9e090bac"
 
 # Validate the CloudFormation template
 echo "Validating the CloudFormation template..."
@@ -33,7 +34,7 @@ aws cloudformation describe-stacks --stack-name $STACK_NAME > /dev/null 2>&1
 if [ $? -eq 0 ]; then
     # Update the stack
     echo "Updating CloudFormation stack..."
-    aws cloudformation update-stack --stack-name $STACK_NAME --template-url https://$BUCKET_NAME.s3.$REGION.amazonaws.com/$TEMPLATE_FILE --capabilities CAPABILITY_IAM CAPABILITY_NAMED_IAM CAPABILITY_AUTO_EXPAND --parameters ParameterKey=ECRImageURI,ParameterValue=$ECR_IMAGE_URI
+    aws cloudformation update-stack --stack-name $STACK_NAME --template-url https://$BUCKET_NAME.s3.$REGION.amazonaws.com/$TEMPLATE_FILE --capabilities CAPABILITY_IAM CAPABILITY_NAMED_IAM CAPABILITY_AUTO_EXPAND --parameters ParameterKey=ECRImageURI,ParameterValue=$ECR_IMAGE_URI ParameterKey=CertificateArn,ParameterValue=$CERT_ARN
     if [ $? -ne 0 ]; then
         echo "Failed to update stack."
         exit 1
@@ -43,7 +44,7 @@ if [ $? -eq 0 ]; then
 else
     # Create the stack
     echo "Creating CloudFormation stack..."
-    aws cloudformation create-stack --stack-name $STACK_NAME --template-url https://$BUCKET_NAME.s3.$REGION.amazonaws.com/$TEMPLATE_FILE --capabilities CAPABILITY_IAM CAPABILITY_NAMED_IAM CAPABILITY_AUTO_EXPAND --parameters ParameterKey=ECRImageURI,ParameterValue=$ECR_IMAGE_URI
+    aws cloudformation create-stack --stack-name $STACK_NAME --template-url https://$BUCKET_NAME.s3.$REGION.amazonaws.com/$TEMPLATE_FILE --capabilities CAPABILITY_IAM CAPABILITY_NAMED_IAM CAPABILITY_AUTO_EXPAND --parameters ParameterKey=ECRImageURI,ParameterValue=$ECR_IMAGE_URI ParameterKey=CertificateArn,ParameterValue=$CERT_ARN
     if [ $? -ne 0 ]; then
         echo "Failed to create stack."
         exit 1
