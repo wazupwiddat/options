@@ -91,7 +91,7 @@ func handleOptionsRequest(w http.ResponseWriter, r *http.Request) {
 				continue
 			}
 		}
-		ideas = append(ideas, collectIdeas(iter)...)
+		ideas = append(ideas, collectIdeas(iter, q.Bid)...)
 	}
 
 	res := OptionResponse{
@@ -107,7 +107,7 @@ func handleOptionsRequest(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func collectIdeas(iter *options.StraddleIter) []OptionIdea {
+func collectIdeas(iter *options.StraddleIter, bid float64) []OptionIdea {
 	ideas := []OptionIdea{}
 	for iter.Next() {
 		straddle := *iter.Straddle()
@@ -123,6 +123,8 @@ func collectIdeas(iter *options.StraddleIter) []OptionIdea {
 			Bid:              straddle.Call.Bid,
 			InTheMoney:       straddle.Call.InTheMoney,
 			DaysToExpiration: days,
+			ReturnIfFlat:     straddle.Call.Bid / straddle.Strike, // Premium
+			ReturnIfAssigned: ((straddle.Strike + straddle.Call.Bid) / bid) - 1,
 		}
 		ideas = append(ideas, callIdea)
 		putIdea := OptionIdea{
@@ -132,6 +134,8 @@ func collectIdeas(iter *options.StraddleIter) []OptionIdea {
 			Bid:              straddle.Put.Bid,
 			InTheMoney:       straddle.Put.InTheMoney,
 			DaysToExpiration: days,
+			ReturnIfFlat:     straddle.Put.Bid / straddle.Strike, // Premium
+			ReturnIfAssigned: ((straddle.Strike - straddle.Put.Bid) / bid) - 1,
 		}
 		ideas = append(ideas, putIdea)
 	}

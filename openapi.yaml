@@ -9,6 +9,7 @@ servers:
 paths:
   /options:
     get:
+      operationId: getOptions
       summary: Get options strategies
       description: Retrieve options strategies for a specified ticker and number of weeks out.
       parameters:
