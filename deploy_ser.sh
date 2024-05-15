@@ -25,3 +25,12 @@ NEW_TASK_DEF=$(aws ecs register-task-definition \
 aws ecs update-service --cluster $CLUSTER_NAME --service $SERVICE_NAME --task-definition $NEW_TASK_DEF
 
 echo "Service updated to use new image: $NEW_IMAGE"
+
+# Wait for the service to stabilize
+echo "Waiting for service to stabilize..."
+aws ecs wait services-stable --cluster $CLUSTER_NAME --services $SERVICE_NAME
+if [ $? -eq 0 ]; then
+    echo "Deployment successful. Service is stable."
+else
+    echo "Deployment failed or timed out."
+fi

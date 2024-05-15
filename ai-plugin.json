@@ -9,8 +9,8 @@
             "name": "Get Options Strategies",
             "url": "https://api.jrdub.com/options",
             "http_method": "GET",
-            "headers": [  ],
-            "description": "Retrieve options trading strategies based on specified ticker and weeks out.",
+            "headers": [],
+            "description": "Retrieve options details for a specified ticker and number of weeks out.",
             "query_parameters": [
                 {
                     "name": "ticker",
@@ -24,19 +24,125 @@
                 }
             ],
             "response_mapping": {
-                "path": "$.ideas",
+                "path": "$.Ideas",
                 "type": "array",
                 "element": {
                     "path": "$",
                     "type": "object",
                     "fields": {
-                        "strategyType": {
-                            "path": "$.strategyType",
+                        "Call": {
+                            "path": "$.Call",
+                            "type": "boolean"
+                        },
+                        "Contract": {
+                            "path": "$.Contract",
                             "type": "string"
                         },
-                        "details": {
-                            "path": "$.details",
+                        "Strike": {
+                            "path": "$.Strike",
+                            "type": "number"
+                        },
+                        "Bid": {
+                            "path": "$.Bid",
+                            "type": "number"
+                        },
+                        "InTheMoney": {
+                            "path": "$.InTheMoney",
+                            "type": "boolean"
+                        },
+                        "DaysToExpiration": {
+                            "path": "$.DaysToExpiration",
+                            "type": "integer"
+                        },
+                        "ReturnOnInvestment": {
+                            "path": "$.ReturnOnInvestment",
+                            "type": "number"
+                        },
+                        "ReturnIfFlat": {
+                            "path": "$.ReturnIfFlat",
+                            "type": "number"
+                        },
+                        "ReturnIfAssigned": {
+                            "path": "$.ReturnIfAssigned",
+                            "type": "number"
+                        }
+                    }
+                }
+            }
+        },
+        {
+            "name": "Get Specific Strategies",
+            "url": "https://api.jrdub.com/options/strategies",
+            "http_method": "GET",
+            "headers": [],
+            "description": "Retrieve specific option strategies for a given ticker and number of weeks out.",
+            "query_parameters": [
+                {
+                    "name": "ticker",
+                    "required": true,
+                    "description": "The ticker symbol of the underlying security."
+                },
+                {
+                    "name": "weeksout",
+                    "required": true,
+                    "description": "Number of weeks out to fetch options for."
+                },
+                {
+                    "name": "strategy",
+                    "required": false,
+                    "description": "Specific strategy name to fetch.",
+                    "enum": [
+                        "AnnualizeOutOfTheMoneyCalls",
+                        "AnnualizeOutOfTheMoneyPuts",
+                        "ThreePercentPremiumMaxAssignCalls",
+                        "ThreePercentPremiumMaxAssignPuts"
+                    ]
+                }
+            ],
+            "response_mapping": {
+                "path": "$",
+                "type": "array",
+                "element": {
+                    "path": "$",
+                    "type": "object",
+                    "fields": {
+                        "StrategyName": {
+                            "path": "$.StrategyName",
                             "type": "string"
+                        },
+                        "UnderlyingPrice": {
+                            "path": "$.UnderlyingPrice",
+                            "type": "number"
+                        },
+                        "Contracts": {
+                            "path": "$.Contracts",
+                            "type": "array",
+                            "element": {
+                                "path": "$",
+                                "type": "object",
+                                "fields": {
+                                    "ContractName": {
+                                        "path": "$.ContractName",
+                                        "type": "string"
+                                    },
+                                    "BidAmount": {
+                                        "path": "$.BidAmount",
+                                        "type": "number"
+                                    },
+                                    "DaysRemaining": {
+                                        "path": "$.DaysRemaining",
+                                        "type": "integer"
+                                    },
+                                    "StrikePrice": {
+                                        "path": "$.StrikePrice",
+                                        "type": "number"
+                                    },
+                                    "FinalCalculatedVal": {
+                                        "path": "$.FinalCalculatedVal",
+                                        "type": "number"
+                                    }
+                                }
+                            }
                         }
                     }
                 }

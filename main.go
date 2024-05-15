@@ -21,10 +21,10 @@ type OptionResponse struct {
 }
 
 func main() {
-	http.HandleFunc("/options", handleOptionsRequest)                                  // Handle API requests
-	http.Handle("/spec/", http.StripPrefix("/spec/", http.FileServer(http.Dir("./")))) // Correctly serve files under /spec
-
-	http.HandleFunc("/", rootHandler) // Root handler that checks the path
+	http.HandleFunc("/options", handleOptionsRequest)
+	http.HandleFunc("/options/strategies", handleStrategiesRequest)
+	http.Handle("/spec/", http.StripPrefix("/spec/", http.FileServer(http.Dir("./"))))
+	http.HandleFunc("/", rootHandler)
 
 	log.Println("Server starting on port 8080...")
 	log.Fatal(http.ListenAndServe(":8080", nil))
@@ -32,10 +32,10 @@ func main() {
 
 func rootHandler(w http.ResponseWriter, r *http.Request) {
 	if r.URL.Path != "/" {
-		http.NotFound(w, r) // Respond with 404 for any requests not exactly matching the root
+		http.NotFound(w, r)
 		return
 	}
-	healthCheck(w) // Call healthCheck only if the path is exactly "/"
+	healthCheck(w)
 }
 
 func healthCheck(w http.ResponseWriter) {
@@ -47,47 +47,38 @@ func handleOptionsRequest(w http.ResponseWriter, r *http.Request) {
 	query := r.URL.Query()
 	ticker := query.Get("ticker")
 	if ticker == "" {
-		ticker = "AAPL" // default value if not specified
+		http.Error(w, "Ticker is required", http.StatusBadRequest)
+		return
 	}
 	weeksOutStr := query.Get("weeksout")
 	weeksOut, err := strconv.Atoi(weeksOutStr)
 	if err != nil || weeksOut <= 0 {
-		weeksOut = 5 // default value if not specified or invalid
+		weeksOut = 5
 	}
 
-	// current quote
 	q, err := quote.Get(ticker)
 	if err != nil {
 		http.Error(w, "Unable to retrieve quote for "+ticker, http.StatusInternalServerError)
 		return
 	}
 
-	// collect Fridays
 	fridays := nextSoFridays(weeksOut)
 
-	// collect Ideas from Straddles
 	ideas := []OptionIdea{}
 	for _, friday := range fridays {
 		dt := datetime.New(&friday)
-		formattedDate := fmt.Sprintf("%02d-%02d-%d", friday.Month(), friday.Day(), friday.Year())
-		log.Println("Collecting Straddles for", ticker, formattedDate)
 		iter := options.GetStraddleP(&options.Params{
 			UnderlyingSymbol: strings.ToUpper(ticker),
 			Expiration:       dt,
 		})
 		if iter.Count() == 0 {
-			log.Println("No options available for", formattedDate)
 			thursday := friday.AddDate(0, 0, -1)
 			dt = datetime.New(&thursday)
-			formattedDate = fmt.Sprintf("%02d-%02d-%d", thursday.Month(), thursday.Day(), thursday.Year())
-			log.Println("There must be a holiday that day, trying Thursday", formattedDate)
 			iter = options.GetStraddleP(&options.Params{
 				UnderlyingSymbol: strings.ToUpper(ticker),
 				Expiration:       dt,
 			})
 			if iter.Count() == 0 {
-				log.Println("No options available for", thursday)
-				log.Println("Must be something wrong??? SKIPPING")
 				continue
 			}
 		}
@@ -99,12 +90,73 @@ func handleOptionsRequest(w http.ResponseWriter, r *http.Request) {
 		Bid:   q.Bid,
 	}
 
-	// Write the ideas back to the client
 	w.Header().Set("Content-Type", "application/json")
 	err = json.NewEncoder(w).Encode(res)
 	if err != nil {
 		http.Error(w, "Error encoding response object", http.StatusInternalServerError)
 	}
+}
+
+func handleStrategiesRequest(w http.ResponseWriter, r *http.Request) {
+	query := r.URL.Query()
+	ticker := query.Get("ticker")
+	if ticker == "" {
+		http.Error(w, "Ticker is required", http.StatusBadRequest)
+		return
+	}
+	weeksOutStr := query.Get("weeksout")
+	weeksOut, err := strconv.Atoi(weeksOutStr)
+	if err != nil || weeksOut <= 0 {
+		weeksOut = 5
+	}
+
+	q, err := quote.Get(ticker)
+	if err != nil {
+		http.Error(w, "Unable to retrieve quote for "+ticker, http.StatusInternalServerError)
+		return
+	}
+
+	fridays := nextSoFridays(weeksOut)
+
+	ideas := []OptionIdea{}
+	for _, friday := range fridays {
+		dt := datetime.New(&friday)
+		iter := options.GetStraddleP(&options.Params{
+			UnderlyingSymbol: strings.ToUpper(ticker),
+			Expiration:       dt,
+		})
+		if iter.Count() == 0 {
+			thursday := friday.AddDate(0, 0, -1)
+			dt = datetime.New(&thursday)
+			iter = options.GetStraddleP(&options.Params{
+				UnderlyingSymbol: strings.ToUpper(ticker),
+				Expiration:       dt,
+			})
+			if iter.Count() == 0 {
+				continue
+			}
+		}
+		ideas = append(ideas, collectIdeas(iter, q.Bid)...)
+	}
+
+	strategyName := query.Get("strategy")
+	strategyResponse := buildStrategyResponse(strategyName, q.Bid, ideas)
+
+	w.Header().Set("Content-Type", "application/json")
+	err = json.NewEncoder(w).Encode(strategyResponse)
+	if err != nil {
+		http.Error(w, "Error encoding response object", http.StatusInternalServerError)
+	}
+}
+
+func buildStrategyResponse(strategyName string, underlyingPrice float64, ideas []OptionIdea) []StrategyResponse {
+	response := []StrategyResponse{}
+	for _, strat := range Strategies {
+		if strategyName == "" || strategyName == strat.Name() {
+			response = append(response, strat.Run(ideas, underlyingPrice))
+		}
+	}
+	return response
 }
 
 func collectIdeas(iter *options.StraddleIter, bid float64) []OptionIdea {
@@ -123,7 +175,7 @@ func collectIdeas(iter *options.StraddleIter, bid float64) []OptionIdea {
 			Bid:              straddle.Call.Bid,
 			InTheMoney:       straddle.Call.InTheMoney,
 			DaysToExpiration: days,
-			ReturnIfFlat:     straddle.Call.Bid / straddle.Strike, // Premium
+			ReturnIfFlat:     straddle.Call.Bid / straddle.Strike,
 			ReturnIfAssigned: ((straddle.Strike + straddle.Call.Bid) / bid) - 1,
 		}
 		ideas = append(ideas, callIdea)
@@ -134,7 +186,7 @@ func collectIdeas(iter *options.StraddleIter, bid float64) []OptionIdea {
 			Bid:              straddle.Put.Bid,
 			InTheMoney:       straddle.Put.InTheMoney,
 			DaysToExpiration: days,
-			ReturnIfFlat:     straddle.Put.Bid / straddle.Strike, // Premium
+			ReturnIfFlat:     straddle.Put.Bid / straddle.Strike,
 			ReturnIfAssigned: ((straddle.Strike - straddle.Put.Bid) / bid) - 1,
 		}
 		ideas = append(ideas, putIdea)
@@ -155,10 +207,8 @@ func daysToExpiration(straddle finance.Straddle) int {
 func nextSoFridays(weeks int) []time.Time {
 	var fridays []time.Time
 
-	// Get today's date
 	today := zeroOutTime(time.Now().UTC())
 
-	// Find the first Friday
 	for i := 0; i < 7; i++ {
 		if today.Weekday() == time.Friday {
 			break
@@ -166,13 +216,12 @@ func nextSoFridays(weeks int) []time.Time {
 		today = today.AddDate(0, 0, 1)
 	}
 
-	// Collect the next so many Fridays
 	thisYear := time.Now().Year()
 	for i := 0; i < weeks; i++ {
-		if today.Year() == thisYear || today.Year() > thisYear { // Ensure it's within the current year
+		if today.Year() == thisYear || today.Year() > thisYear {
 			fridays = append(fridays, today)
 		}
-		today = today.AddDate(0, 0, 7) // Move to the next week
+		today = today.AddDate(0, 0, 7)
 	}
 
 	return fridays

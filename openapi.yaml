@@ -10,8 +10,8 @@ paths:
   /options:
     get:
       operationId: getOptions
-      summary: Get options strategies
-      description: Retrieve options strategies for a specified ticker and number of weeks out.
+      summary: Get options details
+      description: Retrieve options details for a specified ticker and number of weeks out.
       parameters:
         - in: query
           name: ticker
@@ -36,40 +36,110 @@ paths:
           description: Invalid request parameters
         '500':
           description: Internal server error
+  /options/strategies:
+    get:
+      operationId: getStrategies
+      summary: Get specific option strategies
+      description: Retrieve specific option strategies for a given ticker and number of weeks out.
+      parameters:
+        - in: query
+          name: ticker
+          schema:
+            type: string
+            default: 'AAPL'
+          description: Ticker symbol of the underlying security.
+        - in: query
+          name: weeksout
+          schema:
+            type: integer
+            default: 5
+          description: Number of weeks out to fetch options for.
+        - in: query
+          name: strategy
+          schema:
+            type: string
+            enum:
+              - AnnualizeOutOfTheMoneyCalls
+              - AnnualizeOutOfTheMoneyPuts
+              - ThreePercentPremiumMaxAssignCalls
+              - ThreePercentPremiumMaxAssignPuts
+      responses:
+        '200':
+          description: Successfully retrieved the strategy
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/StrategyResponse'
+        '400':
+          description: Invalid request parameters
+        '500':
+          description: Internal server error
 components:
   schemas:
-    OptionStrategy:
+    OptionIdea:
       type: object
       properties:
-        ticker:
+        Call:
+          type: boolean
+        Contract:
           type: string
-          example: 'AAPL'
-        date:
-          type: string
-          format: date
-          example: '2024-05-01'
-        strategyType:
-          type: string
-          example: 'Straddle'
-        details:
-          type: object
-          properties:
-            price:
-              type: number
-              format: float
-              example: 200.50
-            potentialReturn:
-              type: number
-              format: float
-              example: 10.5
+        Strike:
+          type: number
+          format: float
+        Bid:
+          type: number
+          format: float
+        InTheMoney:
+          type: boolean
+        DaysToExpiration:
+          type: integer
+        ReturnOnInvestment:
+          type: number
+          format: float
+        ReturnIfFlat:
+          type: number
+          format: float
+        ReturnIfAssigned:
+          type: number
+          format: float
     OptionResponse:
       type: object
       properties:
         Ideas:
           type: array
           items:
-            $ref: '#/components/schemas/OptionStrategy'
+            $ref: '#/components/schemas/OptionIdea'
         Bid:
           type: number
           format: float
           example: 150.50
+    ContractDetail:
+      type: object
+      properties:
+        ContractName:
+          type: string
+        BidAmount:
+          type: number
+          format: float
+        DaysRemaining:
+          type: integer
+        StrikePrice:
+          type: number
+          format: float
+        FinalCalculatedVal:
+          type: number
+          format: float
+    StrategyResponse:
+      type: object
+      properties:
+        StrategyName:
+          type: string
+        UnderlyingPrice:
+          type: number
+          format: float
+        Contracts:
+          type: array
+          items:
+            $ref: '#/components/schemas/ContractDetail'
