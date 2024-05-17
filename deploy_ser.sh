@@ -1,11 +1,12 @@
 #!/bin/bash
 
 # Define variables
-CLUSTER_NAME="OptionsAPIStack-ECSCluster-47tv7oa5GeBu"
-SERVICE_NAME="OptionsAPIService"
-TASK_FAMILY="options-api-task"
-CONTAINER_NAME="options-api-container"
 NEW_IMAGE="026450499422.dkr.ecr.us-east-1.amazonaws.com/options:latest"
+SHARED_OUTPUTS_FILE="../infrastructor/shared-stack-outputs.json"
+CLUSTER_NAME=$(jq -r '.[] | select(.OutputKey=="ECSClusterName") | .OutputValue' $SHARED_OUTPUTS_FILE)
+SERVICE_NAME="options-api-service"
+TASK_FAMILY="options-api-td"
+CONTAINER_NAME="options-api-container"
 
 # Fetch the latest ACTIVE task definition ARN and definition
 TASK_DEFINITION=$(aws ecs describe-task-definition --task-definition $TASK_FAMILY --query 'taskDefinition.taskDefinitionArn' --output text)
