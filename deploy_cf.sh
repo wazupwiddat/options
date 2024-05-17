@@ -1,64 +1,58 @@
 #!/bin/bash
 
-# Variables
+# Set variables
+STACK_NAME="options-api-stack"
 TEMPLATE_FILE="cloudformation.yaml"
-STACK_NAME="OptionsAPIStack"
-BUCKET_NAME="jdub-option-images"  # Update this with your actual S3 bucket name
-REGION="us-east-1"
-ECR_IMAGE_URI="026450499422.dkr.ecr.us-east-1.amazonaws.com/options:latest"  # Update this if needed
+ECR_IMAGE_URI="026450499422.dkr.ecr.us-east-1.amazonaws.com/options:latest"  # Replace with your actual ECR Image URI
 CERT_ARN="arn:aws:acm:us-east-1:026450499422:certificate/390e9185-4df5-4405-89d3-38ec9e090bac"
 
-# Validate the CloudFormation template
-echo "Validating the CloudFormation template..."
-aws cloudformation validate-template --template-body file://$TEMPLATE_FILE
-if [ $? -ne 0 ]; then
-    echo "Template validation failed."
-    exit 1
-else
-    echo "Template successfully validated."
-fi
+# Read the shared outputs from the JSON file
+SHARED_OUTPUTS_FILE="../infrastructor/shared-stack-outputs.json"
+VPC_ID=$(jq -r '.[] | select(.OutputKey=="VPCId") | .OutputValue' $SHARED_OUTPUTS_FILE)
+PUBLIC_SUBNET_ONE_ID=$(jq -r '.[] | select(.OutputKey=="PublicSubnetOneId") | .OutputValue' $SHARED_OUTPUTS_FILE)
+PUBLIC_SUBNET_TWO_ID=$(jq -r '.[] | select(.OutputKey=="PublicSubnetTwoId") | .OutputValue' $SHARED_OUTPUTS_FILE)
+SECURITY_GROUP_ID=$(jq -r '.[] | select(.OutputKey=="SecurityGroupId") | .OutputValue' $SHARED_OUTPUTS_FILE)
+ALB_ARN=$(jq -r '.[] | select(.OutputKey=="ALBArn") | .OutputValue' $SHARED_OUTPUTS_FILE)
+HTTP_LISTENER_ARN=$(jq -r '.[] | select(.OutputKey=="HTTPListenerArn") | .OutputValue' $SHARED_OUTPUTS_FILE)
+HTTPS_LISTENER_ARN=$(jq -r '.[] | select(.OutputKey=="HTTPSListenerArn") | .OutputValue' $SHARED_OUTPUTS_FILE)
+ECS_CLUSTER_NAME=$(jq -r '.[] | select(.OutputKey=="ECSClusterName") | .OutputValue' $SHARED_OUTPUTS_FILE)
+ECS_TASK_EXECUTION_ROLE_ARN=$(jq -r '.[] | select(.OutputKey=="ECSTaskExecutionRoleArn") | .OutputValue' $SHARED_OUTPUTS_FILE)
 
-# Upload the CloudFormation template to S3
-echo "Uploading template to S3..."
-aws s3 cp $TEMPLATE_FILE s3://$BUCKET_NAME/$TEMPLATE_FILE
-if [ $? -ne 0 ]; then
-    echo "Failed to upload template to S3."
-    exit 1
-else
-    echo "Template uploaded successfully."
-fi
+# Create the stack
+aws cloudformation create-stack \
+  --stack-name $STACK_NAME \
+  --template-body file://$TEMPLATE_FILE \
+  --parameters \
+    ParameterKey=CertificateArn,ParameterValue=$CERT_ARN \
+    ParameterKey=ECRImageURI,ParameterValue=$ECR_IMAGE_URI \
+    ParameterKey=ALBArn,ParameterValue=$ALB_ARN \
+    ParameterKey=HTTPListenerArn,ParameterValue=$HTTP_LISTENER_ARN \
+    ParameterKey=HTTPSListenerArn,ParameterValue=$HTTPS_LISTENER_ARN \
+    ParameterKey=ECSClusterName,ParameterValue=$ECS_CLUSTER_NAME \
+    ParameterKey=PublicSubnetOne,ParameterValue=$PUBLIC_SUBNET_ONE_ID \
+    ParameterKey=PublicSubnetTwo,ParameterValue=$PUBLIC_SUBNET_TWO_ID \
+    ParameterKey=SecurityGroup,ParameterValue=$SECURITY_GROUP_ID \
+    ParameterKey=VpcId,ParameterValue=$VPC_ID \
+    ParameterKey=ECSTaskExecutionRoleArn,ParameterValue=$ECS_TASK_EXECUTION_ROLE_ARN \
+  --capabilities CAPABILITY_NAMED_IAM
 
-# Check if the stack already exists
-aws cloudformation describe-stacks --stack-name $STACK_NAME > /dev/null 2>&1
-
-if [ $? -eq 0 ]; then
-    # Update the stack
-    echo "Updating CloudFormation stack..."
-    aws cloudformation update-stack --stack-name $STACK_NAME --template-url https://$BUCKET_NAME.s3.$REGION.amazonaws.com/$TEMPLATE_FILE --capabilities CAPABILITY_IAM CAPABILITY_NAMED_IAM CAPABILITY_AUTO_EXPAND --parameters ParameterKey=ECRImageURI,ParameterValue=$ECR_IMAGE_URI ParameterKey=CertificateArn,ParameterValue=$CERT_ARN
-    if [ $? -ne 0 ]; then
-        echo "Failed to update stack."
-        exit 1
-    else
-        echo "Stack update initiated successfully."
-    fi
-else
-    # Create the stack
-    echo "Creating CloudFormation stack..."
-    aws cloudformation create-stack --stack-name $STACK_NAME --template-url https://$BUCKET_NAME.s3.$REGION.amazonaws.com/$TEMPLATE_FILE --capabilities CAPABILITY_IAM CAPABILITY_NAMED_IAM CAPABILITY_AUTO_EXPAND --parameters ParameterKey=ECRImageURI,ParameterValue=$ECR_IMAGE_URI ParameterKey=CertificateArn,ParameterValue=$CERT_ARN
-    if [ $? -ne 0 ]; then
-        echo "Failed to create stack."
-        exit 1
-    else
-        echo "Stack creation initiated successfully."
-    fi
-fi
-
-# Wait for the stack to be created or updated
-echo "Waiting for stack operation to complete..."
+# Wait for the stack to be created
 aws cloudformation wait stack-create-complete --stack-name $STACK_NAME
-if [ $? -ne 0 ]; then
-    echo "Stack operation did not complete successfully."
-    exit 1
+
+# Check if the stack creation was successful
+if [ $? -eq 0 ]; then
+  echo "Stack $STACK_NAME created successfully."
 else
-    echo "Stack operation completed successfully."
+  echo "Failed to create stack $STACK_NAME."
+  exit 1
 fi
+
+# Get the outputs of the stack
+outputs=$(aws cloudformation describe-stacks --stack-name $STACK_NAME --query "Stacks[0].Outputs")
+
+# Display the outputs
+echo "Stack Outputs:"
+echo $outputs | jq '.'
+
+# Optionally save the outputs to a file
+echo $outputs | jq '.' > options-api-outputs.json

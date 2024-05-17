@@ -1,151 +1,86 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: Deploy Options API on ECS with networking, security, and HTTPS support
+Description: Deploy Options API Service on ECS
+
+Parameters:
+  ECRImageURI:
+    Type: String
+    Description: URI for the ECR Docker image
+  CertificateArn:
+    Type: String
+    Description: The ARN of the SSL/TLS certificate from AWS Certificate Manager
+  ALBArn:
+    Type: String
+    Description: The ARN of the existing Application Load Balancer
+  HTTPListenerArn:
+    Type: String
+    Description: The ARN of the existing HTTP Listener
+  HTTPSListenerArn:
+    Type: String
+    Description: The ARN of the existing HTTPS Listener
+  ECSClusterName:
+    Type: String
+    Description: The name of the existing ECS Cluster
+  PublicSubnetOne:
+    Type: String
+    Description: The ID of the first public subnet
+  PublicSubnetTwo:
+    Type: String
+    Description: The ID of the second public subnet
+  SecurityGroup:
+    Type: String
+    Description: The ID of the security group
+  VpcId:
+    Type: String
+    Description: The ID of the VPC
+  ECSTaskExecutionRoleArn:
+    Type: String
+    Description: The ARN of the ECS Task Execution Role
 
 Resources:
-  VPC:
-    Type: AWS::EC2::VPC
-    Properties:
-      CidrBlock: 10.0.0.0/16
-      EnableDnsSupport: true
-      EnableDnsHostnames: true
-
-  PublicSubnetOne:
-    Type: AWS::EC2::Subnet
-    Properties:
-      VpcId: !Ref VPC
-      CidrBlock: 10.0.1.0/24
-      AvailabilityZone: !Select [0, !GetAZs '']
-      MapPublicIpOnLaunch: true
-
-  PublicSubnetTwo:
-    Type: AWS::EC2::Subnet
-    Properties:
-      VpcId: !Ref VPC
-      CidrBlock: 10.0.2.0/24
-      AvailabilityZone: !Select [1, !GetAZs '']
-      MapPublicIpOnLaunch: true
-
-  InternetGateway:
-    Type: AWS::EC2::InternetGateway
-
-  GatewayAttachment:
-    Type: AWS::EC2::VPCGatewayAttachment
-    Properties:
-      VpcId: !Ref VPC
-      InternetGatewayId: !Ref InternetGateway
-
-  RouteTable:
-    Type: AWS::EC2::RouteTable
-    Properties:
-      VpcId: !Ref VPC
-
-  PublicRoute:
-    Type: AWS::EC2::Route
-    DependsOn: GatewayAttachment
-    Properties:
-      RouteTableId: !Ref RouteTable
-      DestinationCidrBlock: 0.0.0.0/0
-      GatewayId: !Ref InternetGateway
-
-  SubnetRouteTableAssociationOne:
-    Type: AWS::EC2::SubnetRouteTableAssociation
-    Properties:
-      SubnetId: !Ref PublicSubnetOne
-      RouteTableId: !Ref RouteTable
-
-  SubnetRouteTableAssociationTwo:
-    Type: AWS::EC2::SubnetRouteTableAssociation
-    Properties:
-      SubnetId: !Ref PublicSubnetTwo
-      RouteTableId: !Ref RouteTable
-
-  SecurityGroup:
-    Type: AWS::EC2::SecurityGroup
-    Properties:
-      GroupDescription: Allow HTTP and HTTPS to container
-      VpcId: !Ref VPC
-      SecurityGroupIngress:
-        - IpProtocol: tcp
-          FromPort: 80
-          ToPort: 80
-          CidrIp: 0.0.0.0/0
-        - IpProtocol: tcp
-          FromPort: 443
-          ToPort: 443
-          CidrIp: 0.0.0.0/0
-        - IpProtocol: tcp
-          FromPort: 8080
-          ToPort: 8080
-          CidrIp: "0.0.0.0/0"
-
-  ALB:
-    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
-    Properties:
-      Subnets:
-        - !Ref PublicSubnetOne
-        - !Ref PublicSubnetTwo
-      SecurityGroups:
-        - !Ref SecurityGroup
-      Scheme: internet-facing
-
-  HTTPSListener:
-    Type: AWS::ElasticLoadBalancingV2::Listener
-    Properties:
-      DefaultActions:
-        - Type: forward
-          TargetGroupArn: !Ref TargetGroup
-      LoadBalancerArn: !Ref ALB
-      Port: 443
-      Protocol: HTTPS
-      Certificates:
-        - CertificateArn: !Ref CertificateArn
-
-  HTTPListener:
-    Type: AWS::ElasticLoadBalancingV2::Listener
-    Properties:
-      DefaultActions:
-        - Type: forward
-          TargetGroupArn: !Ref TargetGroup
-      LoadBalancerArn: !Ref ALB
-      Port: 80
-      Protocol: HTTP
-
-  TargetGroup:
+  OptionsApiTargetGroup:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
     Properties:
+      Name: options-api-tg
       Port: 8080
       Protocol: HTTP
-      VpcId: !Ref VPC
+      VpcId: !Ref VpcId
       TargetType: ip
       HealthCheckEnabled: true
       HealthCheckPath: "/"
       HealthCheckProtocol: HTTP
       HealthCheckPort: "8080"
 
-  ECSCluster:
-    Type: AWS::ECS::Cluster
-
-  ECSTaskExecutionRole:
-    Type: AWS::IAM::Role
+  OptionsApiHTTPListenerRule:
+    Type: AWS::ElasticLoadBalancingV2::ListenerRule
     Properties:
-      AssumeRolePolicyDocument:
-        Version: '2012-10-17'
-        Statement:
-          - Effect: "Allow"
-            Principal:
-              Service: "ecs-tasks.amazonaws.com"
-            Action:
-              - "sts:AssumeRole"
-      ManagedPolicyArns:
-        - "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
+      Actions:
+        - Type: forward
+          TargetGroupArn: !Ref OptionsApiTargetGroup
+      Conditions:
+        - Field: host-header
+          Values: ["api.jrdub.com"]
+      ListenerArn: !Ref HTTPListenerArn
+      Priority: 1
 
-  ECSTaskDefinition:
+  OptionsApiHTTPSListenerRule:
+    Type: AWS::ElasticLoadBalancingV2::ListenerRule
+    Properties:
+      Actions:
+        - Type: forward
+          TargetGroupArn: !Ref OptionsApiTargetGroup
+      Conditions:
+        - Field: host-header
+          Values: ["api.jrdub.com"]
+      ListenerArn: !Ref HTTPSListenerArn
+      Priority: 1
+
+  OptionsApiTaskDefinition:
     Type: AWS::ECS::TaskDefinition
     Properties:
-      Family: options-api-task
-      Cpu: '256'            # Specify CPU units at the task level
-      Memory: '512'         # Specify memory in MiB at the task level
-      ExecutionRoleArn: !GetAtt ECSTaskExecutionRole.Arn
+      Family: options-api-td
+      Cpu: '256'
+      Memory: '512'
+      ExecutionRoleArn: !Ref ECSTaskExecutionRoleArn
       ContainerDefinitions:
         - Name: options-api-container
           Image: !Ref ECRImageURI
@@ -158,19 +93,18 @@ Resources:
       RequiresCompatibilities:
         - FARGATE
 
-  ECSService:
+  OptionsApiECSService:
     Type: AWS::ECS::Service
-    DependsOn: [HTTPSListener, HTTPListener]  # Ensuring that Listeners are created before the ECS Service
     Properties:
-      ServiceName: OptionsAPIService
-      Cluster: !Ref ECSCluster
-      TaskDefinition: !Ref ECSTaskDefinition
+      ServiceName: options-api-service
+      Cluster: !Ref ECSClusterName
+      TaskDefinition: !Ref OptionsApiTaskDefinition
       DesiredCount: 1
       LaunchType: FARGATE
       LoadBalancers:
         - ContainerName: options-api-container
           ContainerPort: 8080
-          TargetGroupArn: !Ref TargetGroup      
+          TargetGroupArn: !Ref OptionsApiTargetGroup
       NetworkConfiguration:
         AwsvpcConfiguration:
           Subnets:
@@ -180,15 +114,7 @@ Resources:
             - !Ref SecurityGroup
           AssignPublicIp: ENABLED
 
-Parameters:
-  ECRImageURI:
-    Type: String
-    Description: URI for the ECR Docker image
-  CertificateArn:
-    Type: String
-    Description: The ARN of the SSL/TLS certificate from AWS Certificate Manager
-
 Outputs:
-  ALBDNSName:
+  OptionsApiALBDNSName:
     Description: "The DNS Name of the ALB"
-    Value: !GetAtt ALB.DNSName
+    Value: !Ref ALBArn
