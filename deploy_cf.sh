@@ -18,33 +18,67 @@ HTTPS_LISTENER_ARN=$(jq -r '.[] | select(.OutputKey=="HTTPSListenerArn") | .Outp
 ECS_CLUSTER_NAME=$(jq -r '.[] | select(.OutputKey=="ECSClusterName") | .OutputValue' $SHARED_OUTPUTS_FILE)
 ECS_TASK_EXECUTION_ROLE_ARN=$(jq -r '.[] | select(.OutputKey=="ECSTaskExecutionRoleArn") | .OutputValue' $SHARED_OUTPUTS_FILE)
 
-# Create the stack
-aws cloudformation create-stack \
-  --stack-name $STACK_NAME \
-  --template-body file://$TEMPLATE_FILE \
-  --parameters \
-    ParameterKey=CertificateArn,ParameterValue=$CERT_ARN \
-    ParameterKey=ECRImageURI,ParameterValue=$ECR_IMAGE_URI \
-    ParameterKey=ALBArn,ParameterValue=$ALB_ARN \
-    ParameterKey=HTTPListenerArn,ParameterValue=$HTTP_LISTENER_ARN \
-    ParameterKey=HTTPSListenerArn,ParameterValue=$HTTPS_LISTENER_ARN \
-    ParameterKey=ECSClusterName,ParameterValue=$ECS_CLUSTER_NAME \
-    ParameterKey=PublicSubnetOne,ParameterValue=$PUBLIC_SUBNET_ONE_ID \
-    ParameterKey=PublicSubnetTwo,ParameterValue=$PUBLIC_SUBNET_TWO_ID \
-    ParameterKey=SecurityGroup,ParameterValue=$SECURITY_GROUP_ID \
-    ParameterKey=VpcId,ParameterValue=$VPC_ID \
-    ParameterKey=ECSTaskExecutionRoleArn,ParameterValue=$ECS_TASK_EXECUTION_ROLE_ARN \
-  --capabilities CAPABILITY_NAMED_IAM
+# Check if the stack exists
+aws cloudformation describe-stacks --stack-name $STACK_NAME > /dev/null 2>&1
 
-# Wait for the stack to be created
-aws cloudformation wait stack-create-complete --stack-name $STACK_NAME
-
-# Check if the stack creation was successful
 if [ $? -eq 0 ]; then
-  echo "Stack $STACK_NAME created successfully."
+  # Update the stack if it exists
+  aws cloudformation update-stack \
+    --stack-name $STACK_NAME \
+    --template-body file://$TEMPLATE_FILE \
+    --parameters \
+      ParameterKey=CertificateArn,ParameterValue=$CERT_ARN \
+      ParameterKey=ECRImageURI,ParameterValue=$ECR_IMAGE_URI \
+      ParameterKey=ALBArn,ParameterValue=$ALB_ARN \
+      ParameterKey=HTTPListenerArn,ParameterValue=$HTTP_LISTENER_ARN \
+      ParameterKey=HTTPSListenerArn,ParameterValue=$HTTPS_LISTENER_ARN \
+      ParameterKey=ECSClusterName,ParameterValue=$ECS_CLUSTER_NAME \
+      ParameterKey=PublicSubnetOne,ParameterValue=$PUBLIC_SUBNET_ONE_ID \
+      ParameterKey=PublicSubnetTwo,ParameterValue=$PUBLIC_SUBNET_TWO_ID \
+      ParameterKey=SecurityGroup,ParameterValue=$SECURITY_GROUP_ID \
+      ParameterKey=VpcId,ParameterValue=$VPC_ID \
+      ParameterKey=ECSTaskExecutionRoleArn,ParameterValue=$ECS_TASK_EXECUTION_ROLE_ARN \
+    --capabilities CAPABILITY_NAMED_IAM
+
+  # Wait for the stack to be updated
+  aws cloudformation wait stack-update-complete --stack-name $STACK_NAME
+
+  # Check if the stack update was successful
+  if [ $? -eq 0 ]; then
+    echo "Stack $STACK_NAME updated successfully."
+  else
+    echo "Failed to update stack $STACK_NAME."
+    exit 1
+  fi
 else
-  echo "Failed to create stack $STACK_NAME."
-  exit 1
+  # Create the stack if it does not exist
+  aws cloudformation create-stack \
+    --stack-name $STACK_NAME \
+    --template-body file://$TEMPLATE_FILE \
+    --parameters \
+      ParameterKey=CertificateArn,ParameterValue=$CERT_ARN \
+      ParameterKey=ECRImageURI,ParameterValue=$ECR_IMAGE_URI \
+      ParameterKey=ALBArn,ParameterValue=$ALB_ARN \
+      ParameterKey=HTTPListenerArn,ParameterValue=$HTTP_LISTENER_ARN \
+      ParameterKey=HTTPSListenerArn,ParameterValue=$HTTPS_LISTENER_ARN \
+      ParameterKey=ECSClusterName,ParameterValue=$ECS_CLUSTER_NAME \
+      ParameterKey=PublicSubnetOne,ParameterValue=$PUBLIC_SUBNET_ONE_ID \
+      ParameterKey=PublicSubnetTwo,ParameterValue=$PUBLIC_SUBNET_TWO_ID \
+      ParameterKey=SecurityGroup,ParameterValue=$SECURITY_GROUP_ID \
+      ParameterKey=VpcId,ParameterValue=$VPC_ID \
+      ParameterKey=ECSTaskExecutionRoleArn,ParameterValue=$ECS_TASK_EXECUTION_ROLE_ARN \
+    --capabilities CAPABILITY_NAMED_IAM
+
+  # Wait for the stack to be created
+  aws cloudformation wait stack-create-complete --stack-name $STACK_NAME
+
+  # Check if the stack creation was successful
+  if [ $? -eq 0 ]; then
+    echo "Stack $STACK_NAME created successfully."
+  else
+    echo "Failed to create stack $STACK_NAME."
+    exit 1
+  fi
 fi
 
 # Get the outputs of the stack

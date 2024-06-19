@@ -89,6 +89,7 @@ func handleOptionsRequest(w http.ResponseWriter, r *http.Request) {
 		Ideas: ideas,
 		Bid:   q.Bid,
 	}
+	log.Println("Option Response: ", query)
 
 	w.Header().Set("Content-Type", "application/json")
 	err = json.NewEncoder(w).Encode(res)
@@ -141,6 +142,8 @@ func handleStrategiesRequest(w http.ResponseWriter, r *http.Request) {
 
 	strategyName := query.Get("strategy")
 	strategyResponse := buildStrategyResponse(strategyName, q.Bid, ideas)
+
+	log.Println("Strategy Response: ", query)
 
 	w.Header().Set("Content-Type", "application/json")
 	err = json.NewEncoder(w).Encode(strategyResponse)

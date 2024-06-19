@@ -89,6 +89,12 @@ Resources:
           Cpu: 256
           PortMappings:
             - ContainerPort: 8080
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group: /ecs/options-api
+              awslogs-region: us-east-1
+              awslogs-stream-prefix: ecs            
       NetworkMode: awsvpc
       RequiresCompatibilities:
         - FARGATE
